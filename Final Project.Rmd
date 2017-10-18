@@ -1,0 +1,251 @@
+---
+title: "Final Project"
+author: "Grace Francese, John Desan, Jared McCloskey & Julia Donheiser"
+date: "Fall 2016"
+output: oilabs::lab_report
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(dplyr)
+library(ggplot2)
+library(oilabs)
+load(url("https://stat.duke.edu/~mc301/data/movies.Rdata"))
+```
+
+* * *
+
+### Introduction:
+
+The first consumer DVD player was introduced to the market in 1996. After its introduction, the process of releasing movies to DVD became much more streamlined. However, our group wanted to understand which factors influenced DVD release times before the consumer DVD player was created. Using data on 651 randomly sampled movies from the Rotten Tomatoes database, we attempted to find out.
+
+Our first question was whether the mean DVD release time differed between Spilled (bad) and Upright (good) movies. We hypothesized that Upright movies were released to DVD at a different rate than Spilled movies due to popular demand and incentive for increased revenue.
+
+We also sought out to build a linear model for predicting DVD release times. Building our model helped us better understand which factors influenced DVD release times before the consumer DVD player was introduced to the market in 1996. Ultimately, we hoped our model would allow us to accurately predict DVD release time for movies released before 1996.
+
+### Exploratory Data Analysis
+
+First we created a variable called time_to_dvd, which gives the number of days between a movie's theater release date and its DVD release date. We ignored DVD-first movies in creating this variable, such that they will have NA as their value.
+```{r warning = FALSE, echo = FALSE, message = FALSE}
+
+#Create new variable that is the time until a movie was released on DVD after its theater release date
+
+#Only include positive times e.g. ignore movies that were released on DVD before they were released in theaters
+
+#Convert data to dates
+movies$thtr_rel_date <- as.Date(paste(movies$thtr_rel_month, movies$thtr_rel_day, movies$thtr_rel_year, sep = '-'), format = '%m-%d-%Y')
+movies$dvd_rel_date <- as.Date(paste(movies$dvd_rel_month, movies$dvd_rel_day, movies$dvd_rel_year, sep = '-'), format = '%m-%d-%Y')
+
+#Calculate time until release
+movies$time_to_dvd <- ifelse((as.numeric(difftime(movies$dvd_rel_date, movies$thtr_rel_date, units = 'days')) > 0), 
+                                    as.numeric(difftime(movies$dvd_rel_date, movies$thtr_rel_date, units = 'days')), NA)
+```
+
+Then we looked at the spread and center of the variable time_to_dvd to get a sense of our data.
+```{r echo = FALSE}
+
+hist(movies$time_to_dvd, breaks = 32, main = "Histogram of DVD Release Times", xlab = "DVD Release Time (Days)")
+
+movies %>%
+  summarise(mean = mean(time_to_dvd, na.rm = TRUE), sd = sd(time_to_dvd, na.rm = TRUE),
+            median = median(time_to_dvd, na.rm = TRUE), iqr = IQR(time_to_dvd, na.rm = TRUE))
+
+quantile(movies$time_to_dvd, na.rm = TRUE)
+```
+
+The time until a movie is released on DVD is strongly right skewed. The median time until a movie is released on DVD is 395 days, or about one year. The IQR is 3776.5 days, spanning from 135.25 to 3911.75 days.
+
+That being said, there are a lot of factors that could impact the time it takes for a movie to be released on DVD -- and possibly explain the right skew. Since the first consumer DVD player was not introduced to the market until 1996, we decided to look at a scatterplot of DVD release times versus when theater release date to see if the relationship between the two variables changed in 1996 (and to see if there was a relationship between the two variables at all).
+```{r echo = FALSE, warning = FALSE}
+
+ggplot(movies,aes(thtr_rel_date,time_to_dvd)) +
+  geom_point() +
+  ggtitle("DVD Release Times vs. Theater Release Date") +
+  xlab("Theater Release Date (Year)") +
+  ylab("DVD Release Time (Days)")
+```
+
+We can see that thtr_rel_date and time_to_dvd have a strong, negative linear relationship until about 1996. After 1996, DVD release times are relatively constant.
+
+The negative and linear relationship before 1996 can be explained by the development of DVD-making technology. If we think of the consumer DVD player as the 'height' of DVD-making technology, it makes sense that the time until movies were released to DVD remained somewhat constant after 1996. Although developments in DVD player technology were made since 1996, their effect on time until a movie is released on DVD is negligible compared to the effect of introducing the consumer DVD player into the movie market.
+
+However, the introduction of the consumer DVD player also meant that a more rigid system for DVD production was put in place, such as set contracts with DVD companies. This leaves less room for elements like movie popularity to influence how quickly a movie is introduced to DVD.
+
+Our group decided to focus our project on understanding influencers on DVD release times before the introduction of the consumer DVD player. The first step we took was creating a new dataset, early_movies, which consists of the subset of movies released before 1996 from the Rotten Tomatoes movies dataset. We then looked at the spread and summary statistics of DVD release times for that subset of movies.
+
+```{r echo = FALSE, warning = FALSE, message = FALSE}
+
+#Only movies before 1996
+early_movies <- subset(movies, thtr_rel_year < 1996)
+
+hist(early_movies$time_to_dvd)
+
+early_movies %>%
+  summarise(mean = mean(time_to_dvd, na.rm = TRUE), sd = sd(time_to_dvd, na.rm = TRUE),
+            median = median(time_to_dvd, na.rm = TRUE), iqr = IQR(time_to_dvd, na.rm = TRUE))
+
+quantile(early_movies$time_to_dvd, na.rm = TRUE)
+```
+
+We can see that the spread of early movie DVD release times is nearly normal and centered at 5674.628 days, with a standard deviation of 2867.622 days. Since this data definitely represents less than 10 percent of all movies released before 1996 and the movies are relatively independent of one another (ignoring the fact that certain actors appear in multiple movies and that directors usually make more than one movie), most conditions for inference are met. We will address conditions for specific types of inference in the next section.
+
+### Inference
+
+Although we can clearly see a linear relationship between DVD release times and movie release date, we were curious if factors like movie popularity also influenced DVD release times before 1996. We conducted an independent means t-test using audience_rating as a measure of popularity. The variable has two levels: 'Upright' for movies that received positive audience ratings and 'Spilled' for movies that did not.
+
+Before we conducted the t-test, we tested for conditions. Both the Spilled and Upright movies in our dataset represent less than 10% of their relative populations (in our case, every good and bad movie ever created) and are independent of one another because one movie cannot have both ratings. Movies within each level are also independent of one another, as explained in our exploratory data analysis. We split our sample by Spilled and Upright movies to make sure all other conditions for inference were met within groups.
+```{r echo = FALSE, warning = FALSE, message = FALSE}
+
+early_movies %>%
+  group_by(audience_rating) %>%
+  summarise(mean = mean(audience_score), median = median(audience_score),
+            sd = sd(audience_score), iqr = IQR(audience_score))
+
+ggplot(early_movies,aes(time_to_dvd)) +
+  geom_histogram(binwidth = 900) +
+  facet_grid(audience_rating ~ .) +
+  ggtitle("DVD Release Times by Audience Rating") +
+  xlab("DVD Release Time (Days)") +
+  ylab("Frequency")
+```
+
+Both spilled and upright movies released before 1996 have fairly normal distributions of DVD release times. There is no skew, as can be seen by the fact that the mean and median for Spilled and Upright movies respectively are equal. Therefore, we can conduct a independent means T-test to compare the average time_to_dvd between spilled and upright movies.
+
+```{r echo = FALSE, warning = FALSE, message = FALSE}
+inference(y = time_to_dvd, x = audience_rating, data = early_movies, statistic = 'mean', type = 'ht', null = 0, alternative = 'twosided', method = 'theoretical')
+```
+
+At a significance level of alpha = 0.05, the data do not provide convincing evidence that mean DVD release times differ by audience rating, p > 0.05. We fail to reject the null hypothesis that popularity, based on the variable audience_score, has no impact on the DVD release time of movies released to theaters before 1996.
+
+### Modeling
+
+That being said, other factors may have also contributed to variation in DVD release times. To determine what those factors were, we used backwards selection with p-values to develop a multiple linear regression model for movies released before 1996.
+
+We left out critics rating and audience rating in our initial full model because they are proxies for critics score and audience, and thus would be collinear. We also left out categorical variables like director and actor since they have well over 30 levels, and some levels only had one or two observations. Furthermore, variables like best_dir_win are good proxies for whether directors, actors, etc. are good or well known, and have less levels than their counterpart variables -- so we used those in our full model instead.
+
+```{r echo = FALSE, warning = FALSE}
+
+print("Full Model")
+
+full <- lm(time_to_dvd ~ title_type + genre + runtime + mpaa_rating + thtr_rel_date + imdb_rating + imdb_num_votes + critics_score + audience_score + best_pic_nom + best_pic_win + best_actor_win + best_actress_win + best_dir_win + top200_box, data = early_movies)
+summary(full)
+```
+```{r include = FALSE, warning = FALSE}
+
+#Drop critics_score
+lm1 <- lm(time_to_dvd ~ title_type + genre + runtime + mpaa_rating + thtr_rel_date + imdb_rating + imdb_num_votes + audience_score + best_pic_nom + best_pic_win + best_actor_win + best_actress_win + best_dir_win + top200_box, data = early_movies)
+summary(lm1)
+
+#Drop imdb_rating
+lm2 <- lm(time_to_dvd ~ title_type + genre + runtime + mpaa_rating + thtr_rel_date + imdb_num_votes + audience_score + best_pic_nom + best_pic_win + best_actor_win + best_actress_win + best_dir_win + top200_box, data = early_movies)
+summary(lm2)
+
+#Drop best_dir_win
+lm3 <- lm(time_to_dvd ~ title_type + genre + runtime + mpaa_rating + thtr_rel_date +  imdb_num_votes + audience_score + best_pic_nom + best_pic_win + best_actor_win +  best_actress_win + top200_box, data = early_movies)
+summary(lm3)
+
+#Drop best_pic_nom
+lm4 <- lm(time_to_dvd ~ title_type + genre + runtime + mpaa_rating + thtr_rel_date + imdb_num_votes + audience_score + best_pic_win + best_actor_win + best_actress_win + top200_box, data = early_movies)
+summary(lm4)
+
+#Drop best_actor_win
+lm5 <- lm(time_to_dvd ~ title_type + genre + runtime + mpaa_rating + thtr_rel_date + imdb_num_votes + audience_score + best_pic_win + best_actress_win + top200_box, data = early_movies)
+summary(lm5)
+
+#Drop mpaa_rating
+lm6 <- lm(time_to_dvd ~ title_type + genre + runtime + thtr_rel_date + imdb_num_votes + audience_score + best_pic_win + best_actress_win + top200_box, data = early_movies)
+summary(lm6)
+
+#Drop imdb_num_votes
+lm7 <- lm(time_to_dvd ~ title_type + genre + runtime + thtr_rel_date + audience_score + best_pic_win + best_actress_win + top200_box, data = early_movies)
+summary(lm7)
+
+#Drop best_pic_win
+lm8 <- lm(time_to_dvd ~ title_type + genre + runtime + thtr_rel_date + audience_score + best_actress_win + top200_box, data = early_movies)
+summary(lm8)
+
+#Drop top200_box
+lm9 <- lm(time_to_dvd ~ title_type + genre + runtime + thtr_rel_date + audience_score + best_actress_win, data = early_movies)
+summary(lm9)
+
+#Drop title_type
+lm10 <- lm(time_to_dvd ~ genre + runtime + thtr_rel_date + audience_score + best_actress_win, data = early_movies)
+summary(lm10)
+
+#Drop best_actress_win
+lm11 <- lm(time_to_dvd ~ genre + runtime + thtr_rel_date + audience_score, data = early_movies)
+summary(lm11)
+```
+```{r echo = FALSE, warning  = FALSE}
+
+print("Final Model after Backwards Selection Using p-values")
+lm <- lm11
+summary(lm)
+```
+
+At the alpha = 0.05 level, significant predictors of DVD release time were movie genre (although not all levels were significant predictors), runtime, theater release date and audience score. We also checked conditions to make sure our model was plausible to use for prediction.
+
+```{r echo = FALSE, warning = FALSE, message = FALSE}
+
+#Check for collinearity
+ggpairs(early_movies, columns = c(3,4,18,33,35))
+
+```
+
+Runtime and audience score do not have linear relationships with time_to_dvd. Therefore, we removed both variables from our model and revisited our conditions.
+
+Through developing our linear model, we found that theater release date was a significant predictor of DVD release times. Some -- but not all -- levels of genre were also significant predictors of DVD release times. 
+
+Overall, our model accounts for 87.35% of variability in DVD release times, with an adjusted R-squared value of 0.8673.
+
+Our final model gives the regression equation:
+time_to_dvd_hat = 11830 - 1.1*thtr_rel_date + 241.2*genreAnimation + 866.4*genreArt_House_&_International + 482.5*genreComedy + 968.2*genreDocumentary + 544.2*genreDrama + 647.6*genreHorror + 294.7*genreMusical_&_Performing_Arts + 84.01*genreMystery_&_Suspense + 365.2*genreOther + 790.4*genreScience_Fiction_&_Fantasy
+
+### Prediction
+
+Our model met all conditions for prediction: Residuals were nearly normal and had constant variation. We also know that residuals are independent for our model. Therefore, we can proceed with using our model to predict DVD release times for movies released to theaters before 1996.
+
+```{r echo = FALSE, warning = FALSE, message = FALSE}
+
+lm <- lm(time_to_dvd ~ thtr_rel_date + genre, data = early_movies)
+summary(lm)
+
+#Linearity
+ggpairs(early_movies, columns = c(3,33,35))
+
+#Nearly normal residuals
+qplot(x = .resid, data = lm, geom = "histogram", binwidth = 25, main = "Nearly Normal Residuals") +
+  xlab("Residuals") +
+  ylab("Count")
+
+#Constant Variation of Residuals
+qplot(x = .fitted, y = .resid, data = lm, main = "Constant Variation of Residuals") +
+  geom_hline(yintercept = 0, linetype = "dashed") +
+  xlab("Fitted values") +
+  ylab("Residuals")
+```
+
+We used our model to predict the DVD release times for Lord of the Flies and F for Fake. We chose these two movies because they represented the two levels of genre that were significant predictors of DVD release times at a signficance level of 0.05.
+
+```{r echo = FALSE, warning = FALSE, message = FALSE}
+
+flies <- data.frame(genre = "Drama", thtr_rel_date = as.Date("1989-01-01"))
+
+predict(lm, flies, interval = 'predict')
+
+fake <- data.frame(genre = "Documentary", thtr_rel_date = as.Date("1974-09-01"))
+
+predict(lm, fake, interval = 'predict')
+```
+
+Our model predicts that the DVD release time for Lord of the Flies is approximately 4,737 days. The actual DVD relase time for Lord of the Flies was 4,706 days. The residual for this prediction was -31, meaning the prediction was an overestimate.
+
+Our model also predicts that the DVD release time for F for Fake is approximately 10,920 days. The actual DVD release time for F for Fake was 11,195. The residual for this prediction was 275, meaning the prediction was an underestimate.
+
+### Conclusion
+
+The first consumer DVD player was released in 1996. Prior to then, there was little to no formal process for releasing movies to DVD. Although DVD release times after 1996 remained relatively constant, factors like studio contracts and gross movie profits could explain some of the variability in the data. However, this information was not included in our dataset. As such, our group set out to find different variables that could have affected DVD release times for movies released in theaters before 1996.
+
+DVD release times steadily decreased in the years leading up to 1996. This was likely a result of improved DVD making technology over time. We found that DVD release times did not differ by audience rating, which acted as a measure of movie popularity, for movies released before 1996.
+
+Ultimately, we developed a linear regression model that predicted DVD release time for movies based on theater release date and movie genre. Our model accounted for most of the variability in DVD release times. Future studies that hope to predict DVD release times of movies released to theaters before 1996 should work to bring in variables outside of the Rotten Tomatoes database and the dataset used in this study, such as gross movie profits. It would be interesting to see if there was overlap between which variables influenced DVD release times before and after the introduction of the consumer DVD player.
